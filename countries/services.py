@@ -4,7 +4,7 @@ from decimal import Decimal
 from django.utils import timezone
 from .models import Country, RefreshStatus
 
-def fetch_countries_data():
+def fetch_country_data():
     """Fetch country info from REST Countries API."""
     url = "https://restcountries.com/v2/all?fields=name,capital,region,population,flag,currencies"
     try:
