@@ -1,10 +1,6 @@
-from django.shortcuts import render
-
-# Create your views here.
-import io
-import random
+import os
 from datetime import datetime
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 from django.http import JsonResponse, FileResponse
 from django.shortcuts import get_object_or_404
 from rest_framework import status, generics
@@ -12,8 +8,7 @@ from rest_framework.views import APIView
 from django.db.models import F
 from .models import Country, RefreshStatus
 from .serializers import CountrySerializer
-from .services import fetch_country_data
-import os
+from .services import refresh_countries_data
 
 CACHE_DIR = "cache"
 SUMMARY_IMAGE_PATH = os.path.join(CACHE_DIR, "summary.png")
@@ -21,52 +16,33 @@ SUMMARY_IMAGE_PATH = os.path.join(CACHE_DIR, "summary.png")
 
 class RefreshCountriesView(APIView):
     """POST /countries/refresh — Fetch and cache data"""
-
     def post(self, request):
         try:
-            countries_data = fetch_country_data()
-            # Delete and repopulate database
-            Country.objects.all().delete()
-            for data in countries_data:
-                Country.objects.create(**data)
-
-            # Update refresh status
-            status_obj, _ = RefreshStatus.objects.get_or_create(id=1)
-            status_obj.last_refreshed_at = datetime.utcnow()
-            status_obj.total_countries = Country.objects.count()
-            status_obj.save()
-
-            # Generate summary image
+            result = refresh_countries_data()
             self.generate_summary_image()
-
-            return JsonResponse(
-                {"message": "Countries refreshed successfully."},
-                status=status.HTTP_200_OK
-            )
-
+            return JsonResponse(result, status=status.HTTP_200_OK)
         except Exception as e:
+            import traceback
+            print(traceback.format_exc())
             return JsonResponse(
                 {"error": "Failed to refresh countries", "details": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
     def generate_summary_image(self):
-        """Create summary image with top 5 countries by GDP"""
+        """Create summary image with top 5 countries by estimated GDP"""
         os.makedirs(CACHE_DIR, exist_ok=True)
         img = Image.new("RGB", (600, 400), color=(255, 255, 255))
         draw = ImageDraw.Draw(img)
 
-        title = "Country Summary"
-        draw.text((20, 20), title, fill="black")
+        draw.text((20, 20), "Country Summary", fill="black")
 
-        # Top 5 countries by GDP
         top_countries = Country.objects.order_by(F('estimated_gdp').desc())[:5]
         y = 60
         for c in top_countries:
-            draw.text((20, y), f"{c.name}: {round(c.estimated_gdp, 2)}", fill="blue")
+            draw.text((20, y), f"{c.name}: {round(c.estimated_gdp or 0, 2)}", fill="blue")
             y += 30
 
-        # Footer
         total = Country.objects.count()
         draw.text((20, 280), f"Total: {total}", fill="black")
         draw.text((20, 310), f"Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}", fill="gray")
@@ -88,11 +64,11 @@ class CountryListView(generics.ListAPIView):
             qs = qs.filter(region__iexact=region)
         if currency:
             qs = qs.filter(currency_code__iexact=currency)
-        if sort:
-            if sort == "gdp_desc":
-                qs = qs.order_by(F("estimated_gdp").desc(nulls_last=True))
-            elif sort == "gdp_asc":
-                qs = qs.order_by(F("estimated_gdp").asc(nulls_last=True))
+        if sort == "gdp_desc":
+            qs = qs.order_by(F("estimated_gdp").desc(nulls_last=True))
+        elif sort == "gdp_asc":
+            qs = qs.order_by(F("estimated_gdp").asc(nulls_last=True))
+
         return qs
 
 
