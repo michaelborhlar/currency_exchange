@@ -51,7 +51,6 @@ class RefreshCountriesView(APIView):
 
 
 class CountryListView(generics.ListAPIView):
-    """GET /countries — supports filtering and sorting"""
     serializer_class = CountrySerializer
 
     def get_queryset(self):
@@ -65,19 +64,19 @@ class CountryListView(generics.ListAPIView):
         if currency:
             qs = qs.filter(currency_code__iexact=currency)
         if sort == "gdp_desc":
-            qs = qs.order_by(F("estimated_gdp").desc(nulls_last=True))
+            qs = qs.order_by('-estimated_gdp')   # descending numeric order
         elif sort == "gdp_asc":
-            qs = qs.order_by(F("estimated_gdp").asc(nulls_last=True))
+            qs = qs.order_by('estimated_gdp')
 
         return qs
 
-
 class CountryDetailView(APIView):
-    """GET /countries/:name and DELETE /countries/:name"""
-
     def get(self, request, name):
-        country = get_object_or_404(Country, name__iexact=name)
-        return JsonResponse(CountrySerializer(country).data, safe=False)
+        try:
+            country = Country.objects.get(name__iexact=name)
+            return JsonResponse(CountrySerializer(country).data, safe=False)
+        except Country.DoesNotExist:
+            return JsonResponse({"error": "Country not found"}, status=404)
 
     def delete(self, request, name):
         country = Country.objects.filter(name__iexact=name).first()
@@ -85,8 +84,7 @@ class CountryDetailView(APIView):
             return JsonResponse({"error": "Country not found"}, status=404)
         country.delete()
         return JsonResponse({"message": f"{name} deleted successfully."})
-
-
+    
 class StatusView(APIView):
     """GET /status — Show total countries and last refresh"""
     def get(self, request):
