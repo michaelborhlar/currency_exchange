@@ -99,9 +99,9 @@ class StatusView(APIView):
         })
 
 
+# countries/views.py - SummaryImageView
 class SummaryImageView(APIView):
-    """GET /countries/image — Serve summary image"""
     def get(self, request):
         if not os.path.exists(SUMMARY_IMAGE_PATH):
             return JsonResponse({"error": "Summary image not found"}, status=404)
-        return FileResponse(open(SUMMARY_IMAGE_PATH, "rb"), content_type="image/png")
+        return FileResponse(open(SUMMARY_IMAGE_PATH, "rb"), content_type="image/png", status=200)
